@@ -4,10 +4,12 @@
  *
  * Renders the draft page with the THEME'S OWN <BlockRenderer> (auto-imported by
  * name — the host app's component wins), then swaps its blocks live as the CMS
- * editor streams them over postMessage. No theme code is touched: this page only
- * re-enters the theme's existing render path.
+ * editor streams them over postMessage. No theme code is touched.
  *
- * Deliberately theme-agnostic: no imports from a specific theme's `~~/shared/types`.
+ * Portable across the two BlockRenderer contracts in this portfolio:
+ *   - array:  <BlockRenderer :blocks="all" />   (renders + groups the whole list)
+ *   - single: <BlockRenderer :block="one" />    (looped per block)
+ * The contract is detected from the resolved component's declared props.
  */
 type PreviewBlock = { id: string; type: string; data?: Record<string, any> }
 
@@ -32,8 +34,7 @@ const enrichedById = computed(() => {
 })
 
 // Block types whose final render depends on server-side enrichment. Live edits
-// arrive un-enriched from the CMS, so overlay the enriched fields from the last
-// server fetch (v1: reviews/forms track the saved draft, not un-saved keystrokes).
+// arrive un-enriched, so overlay the enriched fields from the last server fetch.
 const ENRICHED_TYPES = new Set(['google_reviews', 'contact', 'advanced_cta'])
 
 function withEnrichment(blocks: PreviewBlock[]): PreviewBlock[] {
@@ -57,11 +58,13 @@ function withEnrichment(blocks: PreviewBlock[]): PreviewBlock[] {
 const liveBlocks = ref<PreviewBlock[]>(withEnrichment(data.value?.data?.content?.blocks ?? []))
 watch(data, () => { liveBlocks.value = withEnrichment(data.value?.data?.content?.blocks ?? []) })
 
-// Origin allowed to drive the preview. Explicit override, else derive from cmsApiUrl.
+// Origin allowed to drive the preview. Explicit override (CMS_ORIGIN), else derive
+// from whichever CMS URL the theme exposes publicly (cmsApiUrl or cmsUrl).
 const allowedOrigin = computed(() => {
-  const pub = config.public as { cmsOrigin?: string; cmsApiUrl?: string }
+  const pub = config.public as { cmsOrigin?: string; cmsApiUrl?: string; cmsUrl?: string }
   if (pub.cmsOrigin) return pub.cmsOrigin
-  try { return pub.cmsApiUrl ? new URL(pub.cmsApiUrl).origin : '' } catch { return '' }
+  const apiish = pub.cmsApiUrl || pub.cmsUrl
+  try { return apiish ? new URL(apiish).origin : '' } catch { return '' }
 })
 
 function onMessage(e: MessageEvent) {
@@ -75,17 +78,36 @@ function onMessage(e: MessageEvent) {
 
 onMounted(() => {
   window.addEventListener('message', onMessage)
-  // Signal the CMS parent that we're ready to receive blocks
   window.parent?.postMessage({ type: 'preview-ready' }, allowedOrigin.value || '*')
 })
 onBeforeUnmount(() => window.removeEventListener('message', onMessage))
 
-// Never index the preview route
 useHead({ meta: [{ name: 'robots', content: 'noindex, nofollow' }] })
+
+// ── Renderer contract detection ────────────────────────────────────────────
+// Resolve the theme's own BlockRenderer and inspect its declared props so we
+// pass the shape it expects: `:blocks` (array) or `:block` (single, looped).
+const Renderer = resolveComponent('BlockRenderer')
+const rendererResolved = computed(() => typeof Renderer !== 'string')
+const rendererMode = computed<'array' | 'single'>(() => {
+  const comp = Renderer as any
+  const p = comp && typeof comp === 'object' ? comp.props : null
+  const names: string[] = !p ? [] : Array.isArray(p) ? p : Object.keys(p)
+  if (names.includes('block') && !names.includes('blocks')) return 'single'
+  return 'array' // default: whole-list renderer (also covers unknown)
+})
 </script>
 
 <template>
   <div>
-    <BlockRenderer v-for="block in liveBlocks" :key="block.id" :block="block" />
+    <template v-if="rendererResolved">
+      <component :is="Renderer" v-if="rendererMode === 'array'" :blocks="liveBlocks" />
+      <template v-else>
+        <component :is="Renderer" v-for="b in liveBlocks" :key="b.id" :block="b" />
+      </template>
+    </template>
+    <div v-else style="padding:2rem;font-family:system-ui,sans-serif;color:#64748b">
+      Live preview: this frontend has no auto-imported <code>&lt;BlockRenderer&gt;</code> component.
+    </div>
   </div>
 </template>
