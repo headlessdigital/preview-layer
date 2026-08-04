@@ -1,0 +1,24 @@
+{
+  "name": "@headless/preview-layer",
+  "version": "0.1.0",
+  "description": "Drop-in Nuxt layer that adds an in-CMS live-preview route (/__preview) to any Head Less CMS frontend, reusing the theme's own BlockRenderer. No theme code required beyond one `extends` line.",
+  "type": "module",
+  "license": "UNLICENSED",
+  "main": "./nuxt.config.ts",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/headlessdigital/preview-layer.git"
+  },
+  "files": [
+    "app",
+    "server",
+    "nuxt.config.ts",
+    "README.md"
+  ],
+  "keywords": [
+    "nuxt",
+    "nuxt-layer",
+    "headless-cms",
+    "preview"
+  ]
+}
