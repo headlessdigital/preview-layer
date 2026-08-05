@@ -85,10 +85,17 @@ onBeforeUnmount(() => window.removeEventListener('message', onMessage))
 useHead({ meta: [{ name: 'robots', content: 'noindex, nofollow' }] })
 
 // ── Renderer contract detection ────────────────────────────────────────────
-// Resolve the theme's own BlockRenderer and inspect its declared props so we
-// pass the shape it expects: `:blocks` (array) or `:block` (single, looped).
-const Renderer = resolveComponent('BlockRenderer')
-const rendererResolved = computed(() => typeof Renderer !== 'string')
+// Resolve the theme's own block renderer. The auto-import name varies by where
+// the component lives + the theme's pathPrefix config: components/BlockRenderer.vue
+// → "BlockRenderer", components/blocks/BlockRenderer.vue → "BlocksBlockRenderer".
+// Try the known names and use the first that resolves.
+const RENDERER_NAMES = ['BlockRenderer', 'BlocksBlockRenderer', 'CmsBlockRenderer', 'PageBlockRenderer', 'BlockRender']
+let Renderer: any = null
+for (const name of RENDERER_NAMES) {
+  const c = resolveComponent(name)
+  if (c && typeof c !== 'string') { Renderer = c; break }
+}
+const rendererResolved = computed(() => !!Renderer)
 const rendererMode = computed<'array' | 'single'>(() => {
   const comp = Renderer as any
   const p = comp && typeof comp === 'object' ? comp.props : null
