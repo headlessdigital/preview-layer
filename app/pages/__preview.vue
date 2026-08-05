@@ -98,10 +98,14 @@ for (const name of RENDERER_NAMES) {
 const rendererResolved = computed(() => !!Renderer)
 const rendererMode = computed<'array' | 'single'>(() => {
   const comp = Renderer as any
-  const p = comp && typeof comp === 'object' ? comp.props : null
+  const p = comp && typeof comp === 'object' ? (comp.props || comp.__props) : null
   const names: string[] = !p ? [] : Array.isArray(p) ? p : Object.keys(p)
-  if (names.includes('block') && !names.includes('blocks')) return 'single'
-  return 'array' // default: whole-list renderer (also covers unknown)
+  // Only whole-list renderers declare a `blocks` prop. Everything else (incl.
+  // globally-registered components whose props aren't introspectable) defaults
+  // to per-block `:block` — the safe direction: a single-renderer crashes if
+  // handed the array, whereas an array-renderer merely loses grouping on single.
+  if (names.includes('blocks')) return 'array'
+  return 'single'
 })
 </script>
 
